@@ -26,7 +26,11 @@ WORKDIR /app
 
 ENTRYPOINT ["java"]
 
-CMD ["-jar", "promsnmp.jar"]
+# Add OpenTelemetry Java agent
+ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/latest/download/opentelemetry-javaagent.jar /app/opentelemetry-javaagent.jar
+RUN chmod 644 /app/opentelemetry-javaagent.jar
+
+CMD ["-XX:+PrintCommandLineFlags", "-Xlog:os,class,gc*=debug:file=/tmp/jvm-startup.log:time,level,tags", "-javaagent:/app/opentelemetry-javaagent.jar", "-jar", "promsnmp.jar"]
 
 # Invalidate only the cache for the layer with labels when we rebuild the same code
 ARG DATE="1970-01-01T00:00:00Z"
