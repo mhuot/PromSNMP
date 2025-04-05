@@ -42,21 +42,42 @@ The application exposes the following endpoints:
 | Endpoint                     | Method | Description                                                          |
 |------------------------------|--------|----------------------------------------------------------------------|
 | `/promSnmp/hello`            | GET    | Returns a simple "Hello World" response                              |
-| `/promSnmp/sample`           | GET    | Returns sample Prometheus metrics from static file                   |
-| `/promSnmp/router`           | GET    | Returns router metrics from static file                              |
+| `/promSnmp/metrics`          | GET    | Returns Prometheus metrics from available devices                    |
+| `/promSnmp/metrics?instance=router-1.example.com` | GET | Returns metrics for a specific instance            |
+| `/promSnmp/services`         | GET    | Returns available services in JSON format                            |
+| `/promSnmp/evictCache`       | GET    | Clears the metrics cache                                             |
+| `/actuator`                  | GET    | Spring Boot Actuator endpoints                                       |
 
 ## 🎢 Deployment playground
 
-You can find in the development folder a stack with Prometheus and Grafana.
+You can find in the deployment folder a stack with Prometheus, Grafana, and Jaeger (for OpenTelemetry tracing).
 
 ```shell
 cd deployment
 docker compose up -d
 ```
+
 Endpoints:
-* Grafana: http://localhost:3000, login admin, password admin
+* Grafana: http://localhost:3000 (login: admin, password: admin)
 * Prometheus: http://localhost:9090
-* PromSNMP: http://localhost:8080
+* PromSNMP: http://localhost:8080/promSnmp
+* Jaeger UI: http://localhost:16686 (for distributed tracing)
+
+### OpenTelemetry Configuration
+
+The application supports distributed tracing with OpenTelemetry. The following environment variables are used:
+
+```
+OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+OTEL_LOGS_EXPORTER: none
+OTEL_SERVICE_NAME: promsnmp
+OTEL_TRACES_SAMPLER: parentbased_traceidratio
+OTEL_TRACES_SAMPLER_ARG: 1.0
+OTEL_PROPAGATORS: tracecontext,baggage
+```
+
+Note: When running in Docker, make sure the Jaeger service is accessible from the PromSNMP container.
 
 ## Create and publish a new release
 
