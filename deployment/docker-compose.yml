@@ -26,7 +26,8 @@ services:
     environment:
       TZ: UTC
       SERVER_PORT: 8080
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+      # OpenTelemetry configuration - enabled when jaeger is running
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_ENABLED:-false}
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_LOGS_EXPORTER: none
       OTEL_SERVICE_NAME: promsnmp
@@ -35,8 +36,8 @@ services:
       OTEL_PROPAGATORS: tracecontext,baggage
     ports:
       - "8080:8080/tcp"
-    depends_on:
-      - jaeger
+    profiles:
+      - default
 
   grafana:
     image: docker.io/grafana/grafana-oss:latest
@@ -50,10 +51,11 @@ services:
       - "3000:3000/tcp"
     depends_on:
       - prometheus
-      - jaeger
 
   jaeger:
     image: jaegertracing/all-in-one:latest
+    profiles:
+      - tracing
     environment:
       - COLLECTOR_OTLP_ENABLED=true
       - OTEL_LOGS_EXPORTER=none  # Disable logs export to Jaeger

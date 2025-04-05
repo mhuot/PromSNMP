@@ -50,7 +50,11 @@ The application exposes the following endpoints:
 
 ## 🎢 Deployment playground
 
-You can find in the deployment folder a stack with Prometheus, Grafana, and Jaeger (for OpenTelemetry tracing).
+You can find in the deployment folder a stack with Prometheus and Grafana. Jaeger is optional for OpenTelemetry tracing.
+
+### Basic Deployment
+
+Start the stack with Prometheus and Grafana:
 
 ```shell
 cd deployment
@@ -61,23 +65,34 @@ Endpoints:
 * Grafana: http://localhost:3000 (login: admin, password: admin)
 * Prometheus: http://localhost:9090
 * PromSNMP: http://localhost:8080/promSnmp
-* Jaeger UI: http://localhost:16686 (for distributed tracing)
+
+### With OpenTelemetry Tracing (Optional)
+
+To enable distributed tracing with Jaeger:
+
+```shell
+cd deployment
+OTEL_ENABLED=http://jaeger:4317 docker compose --profile tracing up -d
+```
+
+Additional endpoints when tracing is enabled:
+* Jaeger UI: http://localhost:16686
 
 ### OpenTelemetry Configuration
 
-The application supports distributed tracing with OpenTelemetry. The following environment variables are used:
+The application supports distributed tracing with OpenTelemetry. The following environment variables are configured:
 
 ```
-OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317  # Set to 'false' when Jaeger is not used
 OTEL_EXPORTER_OTLP_PROTOCOL: grpc
-OTEL_LOGS_EXPORTER: none
+OTEL_LOGS_EXPORTER: none                         # Logs exporting disabled by default
 OTEL_SERVICE_NAME: promsnmp
 OTEL_TRACES_SAMPLER: parentbased_traceidratio
 OTEL_TRACES_SAMPLER_ARG: 1.0
 OTEL_PROPAGATORS: tracecontext,baggage
 ```
 
-Note: When running in Docker, make sure the Jaeger service is accessible from the PromSNMP container.
+The Docker Compose configuration uses profiles to make Jaeger optional, allowing you to run the stack with or without tracing capabilities.
 
 ## Create and publish a new release
 
