@@ -1,10 +1,10 @@
-.DEFAULT_GOAL := promsnmp
+.DEFAULT_GOAL := promsnmp-metrics
 
 SHELL               := /bin/bash -o nounset -o pipefail -o errexit
 VERSION             ?= $(shell mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
 GIT_BRANCH          := $(shell git branch --show-current)
 GIT_SHORT_HASH      := $(shell git rev-parse --short HEAD)
-OCI_TAG             := local/promsnmp:$(VERSION)
+OCI_TAG             := local/promsnmp-metrics:$(VERSION)
 DATE                := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ") # Date format RFC3339
 JAVA_MAJOR_VERSION  := 21
 
@@ -23,11 +23,11 @@ help:
 	@echo ""
 	@echo "Build PromSNMP from source"
 	@echo "Goals:"
-	@echo "  help:         Show this help with explaining the build goals"
-	@echo "  promsnmp:     Compile, assemble"
-	@echo "  oci:          Build container image tagged with: $(OCI_TAG)"
-	@echo "  clean:        Clean the build artifacts"
-	@echo "  release:      Create a release in the local repository, e.g. make release RELEASE_VERSION=x.y.z"
+	@echo "  help:                 Show this help with explaining the build goals"
+	@echo "  promsnmp-metrics:     Compile, assemble"
+	@echo "  oci:                  Build container image tagged with: $(OCI_TAG)"
+	@echo "  clean:                Clean the build artifacts"
+	@echo "  release:              Create a release in the local repository, e.g. make release RELEASE_VERSION=x.y.z"
 	@echo ""
 
 .PHONY: deps-build
@@ -55,12 +55,16 @@ deps-build:
 deps-oci:
 	command -v docker
 
-.PHONY: promsnmp
-promsnmp: deps-build
+.PHONY: promsnmp-metrics
+promsnmp-metrics: deps-build
 	mvn --batch-mode -Dspring.shell.interactive.enabled="false" -DskipTests install
 
+.PHONY: tests
+tests: deps-build
+	mvn --batch-mode -Dspring.shell.interactive.enabled="false" -DskipTests="false" install
+
 .PHONY: oci
-oci: deps-oci promsnmp
+oci: deps-oci promsnmp-metrics
 	docker build -t $(OCI_TAG) \
       --build-arg="VERSION=$(VERSION)" \
       --build-arg="GIT_SHORT_HASH"=$(GIT_SHORT_HASH) \
@@ -104,16 +108,16 @@ release: deps-build
 	@$(MAKE) promsnmp >>$(RELEASE_LOG) 2>&1
 	@echo "$(OK)"
 	@echo -n "🎁 Git commit new release       "
-	@git commit --signoff -am "release: PromSNMP version $(RELEASE_VERSION)" >>$(RELEASE_LOG) 2>&1
+	@git commit --signoff -am "release: PromSNMP Metrics version $(RELEASE_VERSION)" >>$(RELEASE_LOG) 2>&1
 	@echo "$(OK)"
 	@echo -n "🦄 Set Git version tag:         "
-	@git tag -a "v$(RELEASE_VERSION)" -m "Release PromSNMP version $(RELEASE_VERSION)" >>$(RELEASE_LOG) 2>&1
+	@git tag -a "v$(RELEASE_VERSION)" -m "Release PromSNMP Metrics version $(RELEASE_VERSION)" >>$(RELEASE_LOG) 2>&1
 	@echo "$(OK)"
 	@echo -n "⬆️ Set Maven snapshot version:  "
 	@mvn versions:set -DnewVersion=$(SNAPSHOT_VERSION) >>$(RELEASE_LOG) 2>&1
 	@echo "$(OK)"
 	@echo -n "🎁 Git commit snapshot release: "
-	@git commit --signoff -am "release: PromSNMP version $(SNAPSHOT_VERSION)" >>$(RELEASE_LOG) 2>&1
+	@git commit --signoff -am "release: PromSNMP Metrics version $(SNAPSHOT_VERSION)" >>$(RELEASE_LOG) 2>&1
 	@echo "$(OK)"
 	@echo ""
 	@echo "🦄 Congratulations! ✨"

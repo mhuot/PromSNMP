@@ -1,6 +1,6 @@
 ---
-name: promsnmp-build
-run-name: Build PromSNMP
+name: promsnmp-metrics-build
+run-name: Build PromSNMP Metrics
 on:
   workflow_dispatch:
   pull_request:
@@ -36,7 +36,7 @@ jobs:
       - name: Persist JAR artifact
         uses: actions/upload-artifact@v4
         with:
-          name: promsnmp-jar
+          name: promsnmp-metrics-jar
           path: |
             target/*.jar
       - name: Set up QEMU
@@ -59,4 +59,4 @@ jobs:
             DATE=${{ env.BUILD_DATE }}
             GIT_SHORT_HASH=${{ env.SHORT_GIT_SHA }}
             VERSION=${{ env.VERSION }}
-          tags: ghcr.io/pbrane/promsnmp:${{ env.SHORT_GIT_SHA }},ghcr.io/pbrane/promsnmp:${{ env.VERSION }},ghcr.io/pbrane/promsnmp:${{ env.OCI_FLOATING_TAG }}
+          tags: ghcr.io/pbrane/promsnmp-metrics:${{ env.SHORT_GIT_SHA }},ghcr.io/pbrane/promsnmp-metrics:${{ env.VERSION }},ghcr.io/pbrane/promsnmp-metrics:${{ env.OCI_FLOATING_TAG }}
