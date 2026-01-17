@@ -105,7 +105,7 @@ public class SnmpMetricsRepository implements PrometheusMetricsRepository {
 
                         return Optional.of(walkMetrics(snmp, target, instance));
                     } catch (IOException e) {
-                        // Consider logging the error
+                        log.error("Error walking SNMP metrics for instance: {}", instance, e);
                         return Optional.empty();
                     }
                 });
@@ -128,7 +128,6 @@ public class SnmpMetricsRepository implements PrometheusMetricsRepository {
 
                 sb.append("# HELP sysUpTime system uptime in hundredths of a second - 1.3.6.1.2.1.1.3.0\n");
                 sb.append("# TYPE sysUpTime gauge\n");
-                sb.append(String.format("# HELP-READABILITY sysUptime: %s\n", humanReadable));
                 sb.append(String.format("sysUpTime{instance=\"%s\"} %d\n", instance, hundredths));
             }
         }
