@@ -13,6 +13,45 @@
     *   `/metrics`: OpenMetrics format with native histograms.
 *   **Efficiency:** Built-in caching (Caffeine) to reduce load on network devices while serving frequent scrapes.
 
+## 🔭 Network Discovery
+
+PromSNMP features an automated discovery engine that scans your network for SNMP-enabled devices and automatically adds them to the inventory.
+
+### 1. Seeding Discovery
+You can initiate a discovery scan by providing a list of IP addresses (targets) and the SNMP credentials to try against them.
+
+**Endpoint:** `POST /promsnmp/discovery`
+
+**Example Request:**
+```json
+{
+  "snmpConfig": {
+    "version": 1,
+    "readCommunity": "public"
+  },
+  "targets": ["192.168.1.1", "192.168.1.2"]
+}
+```
+
+**Query Parameters:**
+*   `scheduleNow` (boolean, default: `true`): If true, starts the scan immediately.
+*   `saveSeed` (boolean, default: `false`): If true, saves these credentials and targets for the periodic scheduled scan.
+
+### 2. Scheduled Scans
+The application can run discovery scans periodically based on a Cron expression.
+*   **Config:** `DISCOVERY_CRON` (default: `0 0 2 * * *` - nightly at 2 AM).
+*   Any devices found during these scans are automatically added to the inventory and exposed via `/targets`.
+
+### 3. Managing Seeds
+Use the discovery API to manage what parts of your network are being scanned:
+*   `GET /promsnmp/discovery`: List all saved discovery seeds.
+*   `DELETE /promsnmp/discovery/{id}`: Remove a specific discovery seed.
+
+### 4. Persistence & Startup
+Discovery seeds and the resulting device inventory are persisted across application restarts (default: `promsnmp-inventory.json`).
+*   **Startup Scans:** By setting `DISCOVERY_ON_START=true`, the application will immediately trigger a discovery scan for all saved seeds upon booting.
+*   **Encrypted Storage:** The inventory is stored in an encrypted format using the key provided via `PROM_ENCRYPT_KEY`.
+
 ## 👩‍🏭 Build from source
 
 Check out the source code with
@@ -52,11 +91,18 @@ The application exposes the following endpoints:
 
 | Endpoint                     | Method | Description                                                          |
 |------------------------------|--------|----------------------------------------------------------------------|
-| `/promSnmp/hello`            | GET    | Returns a simple "Hello World" response                              |
-| `/promSnmp/evictCache`       | GET    | Clears the cache of metrics in memory                                |
-| `/promSnmp/authProtocols`    | GET    | Lists the supported SNMP Authorization Protocols                     |
-| `/promSnmp/privProtocols`    | GET    | Lists the supported SNMP Privacy Protocols                           |
-| `/promSnmp/threadPools`      | GET    | Lists the current status of the PromSNMP Threadpools                 |
+| `/promsnmp/hello`            | GET    | Returns a simple "Hello World" response                              |
+| `/promsnmp/evictCache`       | GET    | Clears the cache of metrics in memory                                |
+| `/promsnmp/authProtocols`    | GET    | Lists the supported SNMP Authorization Protocols                     |
+| `/promsnmp/privProtocols`    | GET    | Lists the supported SNMP Privacy Protocols                           |
+| `/promsnmp/threadPools`      | GET    | Lists the current status of the PromSNMP Threadpools                 |
+| `/promsnmp/inventory`        | GET    | Export current PromSNMP Inventory as JSON                            |
+| `/promsnmp/inventory`        | POST   | Import PromSNMP Inventory from JSON                                  |
+| `/promsnmp/discovery`        | GET    | Lists all saved discovery seeds                                      |
+| `/promsnmp/discovery`        | POST   | Create a new discovery seed / trigger a scan                         |
+| `/promsnmp/discovery`        | DELETE | Delete all discovery seeds                                           |
+| `/promsnmp/discovery/{id}`   | GET    | Details for a specific discovery seed                                |
+| `/promsnmp/discovery/{id}`   | DELETE | Delete a specific discovery seed                                     |
 | `/targets`                   | GET    | Prometheus HTTP Service Discovery endpoint                           |
 | `/snmp`                      | GET    | Scrapes SNMP metrics for a specified target (param: `target`)        |
 | `/metrics`                   | GET    | OpenMetrics format with native histograms (optional param: `target`) |
