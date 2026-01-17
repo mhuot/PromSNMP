@@ -323,14 +323,14 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(instance)",
+        "definition": "label_values(ifHCInOctets, instance)",
         "includeAll": false,
         "label": "Instance",
         "name": "instance",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(instance)",
+          "query": "label_values(ifHCInOctets, instance)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -343,7 +343,7 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(ifName)",
+        "definition": "label_values(ifHCInOctets{instance=\"$instance\"}, ifName)",
         "includeAll": true,
         "label": "Interface",
         "multi": true,
@@ -351,7 +351,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(ifName)",
+          "query": "label_values(ifHCInOctets{instance=\"$instance\"}, ifName)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
