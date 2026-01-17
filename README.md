@@ -63,6 +63,8 @@ The application exposes the following endpoints:
 
 ## Histogram Support
 
+![Histogram Explainer](docs/images/histogram-explainer.png)
+
 PromSNMP supports both classic Prometheus histograms and native histograms:
 
 - The `/snmp` endpoint provides standard Prometheus time series and classic histograms
