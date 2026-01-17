@@ -1,4 +1,4 @@
-# PromSNMP [![promsnmp-build](https://github.com/pbrane/PromSNMP/actions/workflows/promsnmp-build.yaml/badge.svg)](https://github.com/pbrane/PromSNMP/actions/workflows/promsnmp-build.yaml)
+# PromSNMP Metrics [![promsnmp-build](https://github.com/pbrane/promsnmp-metrics/actions/workflows/promsnmp-build.yaml/badge.svg)](https://github.com/pbrane/promsnmp-metrics/actions/workflows/promsnmp-build.yaml)
 
 ![promSnmpCast](https://github.com/user-attachments/assets/13e0b6a7-6fe7-49f0-9e98-726e736e1370)
 
@@ -7,7 +7,7 @@
 Check out the source code with
 
 ```shell
-git clone https://github.com/pbrane/PromSNMP.git
+git clone https://github.com/pbrane/promsnmp-metrics.git
 ```
 
 Compile and assemble the JAR file including the test suite
