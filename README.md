@@ -2,6 +2,17 @@
 
 ![promSnmpCast](https://github.com/user-attachments/assets/13e0b6a7-6fe7-49f0-9e98-726e736e1370)
 
+## Key Features & Differentiators
+
+*   **Dynamic Inventory & Discovery:** Unlike the standard `snmp_exporter` which relies on static configuration files, PromSNMP Metrics allows you to dynamically add targets via a REST API. It then exposes these targets to Prometheus via HTTP Service Discovery (`/targets`).
+*   **Native Histograms:** Generates high-fidelity Native Histograms for interface utilization, providing far better insight into bandwidth usage patterns than classic buckets alone.
+*   **Persistent State:** The inventory is persisted to an encrypted JSON file (`promsnmp-inventory.json`), ensuring your configuration survives restarts without needing an external database.
+*   **Protocol Support:** Full support for SNMP v1, v2c, and v3 (Auth/Priv).
+*   **Metric Exposure:**
+    *   `/snmp`: Standard Prometheus time series and classic histograms.
+    *   `/metrics`: OpenMetrics format with native histograms.
+*   **Efficiency:** Built-in caching (Caffeine) to reduce load on network devices while serving frequent scrapes.
+
 ## 👩‍🏭 Build from source
 
 Check out the source code with
