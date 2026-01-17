@@ -9,6 +9,12 @@
 *   **Metric Exposure:**
     *   `/snmp`: Standard Prometheus time series and classic histograms.
     *   `/metrics`: OpenMetrics format with support for native histograms.
+*   **Key Endpoints:**
+    *   `/promsnmp/hello`: Returns a simple "Hello World" response.
+    *   `/promsnmp/authProtocols`: Lists supported SNMP Authorization Protocols.
+    *   `/promsnmp/privProtocols`: Lists supported SNMP Privacy Protocols.
+    *   `/promsnmp/threadPools`: Lists PromSNMP thread pool status.
+    *   `/promsnmp/evictCache`: Clears the metrics cache.
 *   **Service Discovery:** Provides a `/targets` endpoint for Prometheus HTTP Service Discovery.
 *   **Caching:** specific caching mechanisms (Caffeine) for efficiency.
 *   **Storage:** Uses an in-memory H2 database for internal configuration and state.
