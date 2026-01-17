@@ -91,22 +91,13 @@ public class MetricsController {
         try (OutputStream os = response.getOutputStream()) {
             // 1. Cached SNMP metrics (classic time series + classic histograms)
             prometheusMetricsService.getMetrics(target, false)
-                    .ifPresentOrElse(
-                            metrics -> {
-                                try {
-                                    os.write(metrics.getBytes(StandardCharsets.UTF_8));
-                                    os.write("\n".getBytes(StandardCharsets.UTF_8)); // separator
-                                } catch (IOException e) {
-                                    throw new RuntimeException("Failed to write cached time series metrics", e);
-                                }
-                            },
-                            () -> {
-                                try {
-                                    os.write("# no cached time series metrics found\n".getBytes(StandardCharsets.UTF_8));
-                                } catch (IOException e) {
-                                    throw new RuntimeException("Failed to write fallback message", e);
-                                }
-                            });
+                    .ifPresent(metrics -> {
+                        try {
+                            os.write(metrics.getBytes(StandardCharsets.UTF_8));
+                        } catch (IOException e) {
+                            throw new RuntimeException("Failed to write cached time series metrics", e);
+                        }
+                    });
 
             // 2. Native histograms filtered by target's "instance" label
             MetricSnapshots snapshots = PrometheusRegistry.defaultRegistry.scrape();
@@ -124,6 +115,7 @@ public class MetricsController {
             }
 
             MetricSnapshots filtered = builder.build();
+
             new OpenMetricsTextFormatWriter(true, false)
                     .write(os, filtered);
         }
@@ -205,9 +197,3 @@ public class MetricsController {
         }
     }
 }
-
-
-
-
-
-

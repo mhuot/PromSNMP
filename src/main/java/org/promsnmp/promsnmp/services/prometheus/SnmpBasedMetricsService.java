@@ -31,7 +31,7 @@ public class SnmpBasedMetricsService implements PrometheusMetricsService {
         Instant end = Instant.now();
         double durationSeconds = Duration.between(start, end).toNanos() / 1_000_000_000.0;
 
-        return rawMetrics.map(metrics -> metrics + "\n"
+        return rawMetrics.map(metrics -> metrics
                 + "# HELP snmp_scrape_duration_seconds Total SNMP time scrape took (cached read).\n"
                 + "# TYPE snmp_scrape_duration_seconds gauge\n"
                 + "snmp_scrape_duration_seconds{source=\"cached\"} " + durationSeconds + "\n");
@@ -46,7 +46,7 @@ public class SnmpBasedMetricsService implements PrometheusMetricsService {
         Instant end = Instant.now();
         double durationSeconds = Duration.between(start, end).toNanos() / 1_000_000_000.0;
 
-        return refreshed.map(metrics -> metrics + "\n"
+        return refreshed.map(metrics -> metrics
                 + "# HELP snmp_scrape_duration_seconds Total SNMP time scrape took (forced, real-time read).\n"
                 + "# TYPE snmp_scrape_duration_seconds gauge\n"
                 + "snmp_scrape_duration_seconds{source=\"uncached\"} " + durationSeconds + "\n");

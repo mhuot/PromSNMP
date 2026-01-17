@@ -12,7 +12,8 @@ RUN apt-get update && \
       ncat \
       net-tools \
       reptyr \
-      snmp && \
+      snmp \
+      snmpd && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

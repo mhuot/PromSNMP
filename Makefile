@@ -105,7 +105,7 @@ release: deps-build
 	@mvn versions:set -DnewVersion=$(RELEASE_VERSION) >>$(RELEASE_LOG) 2>&1
 	@echo "$(OK)"
 	@echo -n "👮‍♀️ Validate:                    "
-	@$(MAKE) promsnmp >>$(RELEASE_LOG) 2>&1
+	@$(MAKE) promsnmp-metrics >>$(RELEASE_LOG) 2>&1
 	@echo "$(OK)"
 	@echo -n "🎁 Git commit new release       "
 	@git commit --signoff -am "release: PromSNMP Metrics version $(RELEASE_VERSION)" >>$(RELEASE_LOG) 2>&1

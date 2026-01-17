@@ -1,4 +1,4 @@
-# PromSNMP
+# PromSNMP Metrics
 
 ## Project Overview
 
@@ -43,7 +43,7 @@ The project includes a `Makefile` to simplify common tasks.
 
 *   **Compile and Assemble (skips tests):**
     ```bash
-    make promsnmp
+    make promsnmp-metrics
     # Or using Maven directly (runs tests):
     ./mvnw clean install
     ```
