@@ -5,6 +5,14 @@ on:
   workflow_dispatch:
   pull_request:
     types: [ opened, synchronize, reopened ]
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
+      - '**.png'
+      - '**.jpg'
+      - 'docs/**'
+      - 'GEMINI.md'
+      - 'snmpd.conf'
   push:
     branches:
       - '*'
