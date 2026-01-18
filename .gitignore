@@ -73,6 +73,7 @@ node_modules/
 *.bak
 *.tmp
 *.~*
+.gemini-clipboard/
 
 ### jenv tool
 .java-version
