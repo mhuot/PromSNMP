@@ -1214,21 +1214,635 @@ networks:
 
 ---
 
+## Cloud Manager Architecture (Recommended)
+
+An alternative to shared filesystem storage is a centralized cloud management service that acts as the source of truth for all PromSNMP instances across multiple sites.
+
+### Architecture Overview
+
+```mermaid
+flowchart TB
+    subgraph Cloud["Cloud Management Service"]
+        direction TB
+        API["REST/gRPC API<br/>Gateway"]
+        DB[("Inventory Database<br/>PostgreSQL")]
+        SYNC["Real-time Sync<br/>(WebSocket/SSE)"]
+        ELECT["Leader Election<br/>Service"]
+        AUDIT[("Audit Log")]
+
+        API <--> DB
+        API <--> SYNC
+        API <--> ELECT
+        API --> AUDIT
+    end
+
+    subgraph SiteA["Site A - Chicago"]
+        direction TB
+        LBA["Load Balancer"]
+        A1["PromSNMP<br/>(Leader)"]
+        A2["PromSNMP<br/>(Follower)"]
+        A3["PromSNMP<br/>(Follower)"]
+        LBA --> A1
+        LBA --> A2
+        LBA --> A3
+    end
+
+    subgraph SiteB["Site B - New York"]
+        direction TB
+        LBB["Load Balancer"]
+        B1["PromSNMP<br/>(Leader)"]
+        B2["PromSNMP<br/>(Follower)"]
+        LBB --> B1
+        LBB --> B2
+    end
+
+    subgraph SiteC["Site C - London"]
+        direction TB
+        LBC["Load Balancer"]
+        C1["PromSNMP<br/>(Leader)"]
+        C2["PromSNMP<br/>(Follower)"]
+        LBC --> C1
+        LBC --> C2
+    end
+
+    A1 <-->|"API"| API
+    A2 <-->|"API"| API
+    A3 <-->|"API"| API
+    B1 <-->|"API"| API
+    B2 <-->|"API"| API
+    C1 <-->|"API"| API
+    C2 <-->|"API"| API
+
+    SYNC -.->|"Push Updates"| A1
+    SYNC -.->|"Push Updates"| A2
+    SYNC -.->|"Push Updates"| A3
+    SYNC -.->|"Push Updates"| B1
+    SYNC -.->|"Push Updates"| B2
+    SYNC -.->|"Push Updates"| C1
+    SYNC -.->|"Push Updates"| C2
+
+    style A1 fill:#c8e6c9,stroke:#2e7d32
+    style B1 fill:#c8e6c9,stroke:#2e7d32
+    style C1 fill:#c8e6c9,stroke:#2e7d32
+    style Cloud fill:#e3f2fd,stroke:#1565c0
+```
+
+### Benefits Over Shared Filesystem
+
+| Concern | NFS/EFS Approach | Cloud Manager Approach |
+|---------|------------------|------------------------|
+| **Inventory Storage** | Encrypted file on shared volume | Central database with API |
+| **Leader Election** | External service (Redis/etcd) | Built into manager |
+| **Multi-Site** | Separate storage per site | Single source of truth |
+| **Conflict Resolution** | File locking (fragile) | Server-side merge logic |
+| **Offline Operation** | Requires NFS availability | Local cache + sync on reconnect |
+| **Audit Trail** | None | Full history in database |
+| **Access Control** | Filesystem permissions | API tokens, RBAC |
+| **Visibility** | Per-site only | Fleet-wide dashboard |
+
+### Instance Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant PS as PromSNMP Instance
+    participant API as Cloud Manager API
+    participant DB as Database
+    participant WS as WebSocket Hub
+
+    Note over PS,WS: Startup & Registration
+    PS->>API: POST /api/v1/instances/register
+    API->>DB: Create/update instance record
+    API-->>PS: {instanceId, siteId, isLeader: false}
+    PS->>WS: Connect WebSocket (instanceId)
+    WS-->>PS: Connected
+
+    Note over PS,WS: Inventory Sync
+    PS->>API: GET /api/v1/sites/{siteId}/inventory
+    API->>DB: Fetch inventory
+    API-->>PS: {devices: [...], version: 42}
+    PS->>PS: Load into H2 + Cache
+
+    Note over PS,WS: Leader Election
+    API->>DB: Check leader health for site
+    API->>DB: Assign PS as leader (previous leader failed)
+    WS-->>PS: {type: "leader_assigned", siteId}
+    PS->>PS: Enable discovery scheduler
+
+    Note over PS,WS: Discovery Results (Leader Only)
+    PS->>PS: Run SNMP discovery
+    PS->>API: POST /api/v1/sites/{siteId}/inventory/devices
+    API->>DB: Merge new devices
+    API->>WS: Broadcast inventory update
+    WS-->>PS: {type: "inventory_updated", version: 43}
+
+    Note over PS,WS: Heartbeat Loop
+    loop Every 30 seconds
+        PS->>API: POST /api/v1/instances/{id}/heartbeat
+        API->>DB: Update last_seen timestamp
+        API-->>PS: {status: "ok", isLeader: true}
+    end
+```
+
+### API Design
+
+#### Authentication
+
+All API requests require a Bearer token:
+```
+Authorization: Bearer <site-api-token>
+```
+
+Tokens are scoped per-site with configurable permissions (read-only, read-write, admin).
+
+#### Core Endpoints
+
+##### Instance Management
+
+```yaml
+# Register a new instance
+POST /api/v1/instances/register
+Request:
+  {
+    "siteId": "chicago-pop-01",
+    "hostname": "promsnmp-a1b2c3",
+    "version": "0.0.10",
+    "capabilities": ["snmpv1", "snmpv2c", "snmpv3"]
+  }
+Response:
+  {
+    "instanceId": "inst_abc123",
+    "siteId": "chicago-pop-01",
+    "isLeader": false,
+    "inventoryVersion": 42,
+    "config": {
+      "discoveryEnabled": true,
+      "discoveryCron": "0 0 2 * * *",
+      "collectionInterval": 30000
+    }
+  }
+
+# Heartbeat (every 30s)
+POST /api/v1/instances/{instanceId}/heartbeat
+Request:
+  {
+    "status": "healthy",
+    "metrics": {
+      "devicesMonitored": 150,
+      "cacheHitRate": 0.94,
+      "snmpQueriesPerMin": 300
+    }
+  }
+Response:
+  {
+    "status": "ok",
+    "isLeader": true,
+    "inventoryVersion": 42,
+    "configVersion": 5
+  }
+
+# Deregister instance (graceful shutdown)
+DELETE /api/v1/instances/{instanceId}
+```
+
+##### Inventory Management
+
+```yaml
+# Get site inventory
+GET /api/v1/sites/{siteId}/inventory
+Query Parameters:
+  - version: int (optional, for conditional fetch)
+  - includeCredentials: bool (default: false, requires admin)
+Response:
+  {
+    "version": 42,
+    "updatedAt": "2024-01-15T10:30:00Z",
+    "devices": [
+      {
+        "id": "dev_xyz789",
+        "sysName": "core-rtr-01",
+        "sysDescr": "Cisco IOS XR",
+        "address": "10.0.1.1",
+        "agents": [
+          {
+            "id": "agt_111",
+            "type": "snmpv2c",
+            "port": 161,
+            "readCommunity": "****"  # Masked unless admin
+          }
+        ],
+        "discoveredAt": "2024-01-10T08:00:00Z",
+        "lastSeen": "2024-01-15T10:25:00Z"
+      }
+    ],
+    "discoverySeeds": [
+      {
+        "id": "seed_001",
+        "targets": ["10.0.1.0/24", "10.0.2.0/24"],
+        "snmpConfig": { "version": 2, "readCommunity": "****" }
+      }
+    ]
+  }
+
+# Add devices (from discovery - leader only)
+POST /api/v1/sites/{siteId}/inventory/devices
+Request:
+  {
+    "devices": [
+      {
+        "sysName": "access-sw-05",
+        "sysDescr": "Cisco Catalyst",
+        "address": "10.0.1.50",
+        "agents": [...]
+      }
+    ],
+    "source": "discovery",
+    "instanceId": "inst_abc123"
+  }
+Response:
+  {
+    "added": 1,
+    "updated": 0,
+    "unchanged": 0,
+    "newVersion": 43
+  }
+
+# Remove device
+DELETE /api/v1/sites/{siteId}/inventory/devices/{deviceId}
+
+# Bulk import inventory
+PUT /api/v1/sites/{siteId}/inventory
+Request:
+  {
+    "devices": [...],
+    "discoverySeeds": [...],
+    "replaceAll": false  # true = replace, false = merge
+  }
+```
+
+##### Discovery Seeds
+
+```yaml
+# List discovery seeds
+GET /api/v1/sites/{siteId}/discovery-seeds
+
+# Create discovery seed
+POST /api/v1/sites/{siteId}/discovery-seeds
+Request:
+  {
+    "targets": ["192.168.1.0/24"],
+    "snmpConfig": {
+      "version": 2,
+      "readCommunity": "public"
+    },
+    "schedule": "0 0 2 * * *",
+    "enabled": true
+  }
+
+# Trigger immediate discovery
+POST /api/v1/sites/{siteId}/discovery-seeds/{seedId}/run
+
+# Delete discovery seed
+DELETE /api/v1/sites/{siteId}/discovery-seeds/{seedId}
+```
+
+##### Site & Fleet Management
+
+```yaml
+# List all sites
+GET /api/v1/sites
+Response:
+  {
+    "sites": [
+      {
+        "id": "chicago-pop-01",
+        "label": "Chicago POP",
+        "instanceCount": 3,
+        "leaderInstanceId": "inst_abc123",
+        "deviceCount": 150,
+        "status": "healthy"
+      }
+    ]
+  }
+
+# Get site details
+GET /api/v1/sites/{siteId}
+
+# Create site
+POST /api/v1/sites
+Request:
+  {
+    "id": "london-dc-01",
+    "label": "London Data Center",
+    "config": {
+      "timezone": "Europe/London",
+      "minReplicas": 2
+    }
+  }
+
+# Get fleet-wide health
+GET /api/v1/fleet/health
+Response:
+  {
+    "totalSites": 3,
+    "healthySites": 3,
+    "totalInstances": 7,
+    "healthyInstances": 7,
+    "totalDevices": 450,
+    "alerts": []
+  }
+```
+
+#### WebSocket Events
+
+Connect to receive real-time updates:
+```
+WSS /api/v1/ws?instanceId={instanceId}&token={token}
+```
+
+##### Event Types
+
+```yaml
+# Inventory updated (broadcast to all site instances)
+{
+  "type": "inventory_updated",
+  "siteId": "chicago-pop-01",
+  "version": 43,
+  "changeType": "device_added",  # device_added, device_removed, device_updated, full_sync
+  "deviceIds": ["dev_xyz789"]
+}
+
+# Leader assignment
+{
+  "type": "leader_assigned",
+  "siteId": "chicago-pop-01",
+  "instanceId": "inst_abc123",
+  "previousLeader": "inst_def456"
+}
+
+# Leader revoked (instance should stop discovery)
+{
+  "type": "leader_revoked",
+  "siteId": "chicago-pop-01",
+  "reason": "manual_override"  # manual_override, health_check_failed, instance_deregistered
+}
+
+# Configuration updated
+{
+  "type": "config_updated",
+  "siteId": "chicago-pop-01",
+  "configVersion": 6,
+  "changes": ["discoveryCron", "collectionInterval"]
+}
+
+# Force inventory refresh
+{
+  "type": "refresh_inventory",
+  "siteId": "chicago-pop-01",
+  "reason": "admin_request"
+}
+```
+
+### PromSNMP Client Integration
+
+The PromSNMP instance needs a client to interact with the Cloud Manager:
+
+```mermaid
+flowchart LR
+    subgraph PromSNMP["PromSNMP Instance"]
+        direction TB
+        CTRL["Controllers<br/>/metrics, /snmp"]
+        SVC["Services"]
+        H2[("H2 DB")]
+        CACHE[("Caffeine Cache")]
+
+        subgraph Client["Cloud Manager Client"]
+            REG["Registration"]
+            HB["Heartbeat<br/>(30s loop)"]
+            SYNC["Inventory Sync"]
+            WS["WebSocket<br/>Listener"]
+            DISC["Discovery<br/>Reporter"]
+        end
+
+        CTRL --> SVC
+        SVC --> H2
+        SVC --> CACHE
+        SVC <--> Client
+    end
+
+    subgraph Manager["Cloud Manager"]
+        API["API"]
+        WSS["WebSocket"]
+    end
+
+    REG -->|"POST /register"| API
+    HB -->|"POST /heartbeat"| API
+    SYNC -->|"GET /inventory"| API
+    DISC -->|"POST /devices"| API
+    WS <-->|"Events"| WSS
+
+    style Client fill:#fff3e0,stroke:#ef6c00
+```
+
+### Offline Operation & Resilience
+
+```mermaid
+stateDiagram-v2
+    [*] --> Starting
+    Starting --> Registering: Start client
+
+    Registering --> Online: Registration successful
+    Registering --> Offline: Connection failed
+
+    Online --> Online: Heartbeat OK
+    Online --> Degraded: Heartbeat timeout (1x)
+    Online --> Offline: Connection lost
+
+    Degraded --> Online: Heartbeat OK
+    Degraded --> Offline: Heartbeat timeout (3x)
+
+    Offline --> Registering: Reconnect attempt
+    Offline --> Offline: Retry backoff
+
+    note right of Online
+        Full functionality:
+        - Real-time sync
+        - Leader election
+        - Discovery reporting
+    end note
+
+    note right of Offline
+        Degraded functionality:
+        - Use cached inventory
+        - Continue metrics collection
+        - Queue discovery results
+        - Retry connection with backoff
+    end note
+```
+
+**Offline behavior:**
+1. Instance continues serving metrics from local H2/cache
+2. Discovery results queued locally (if leader)
+3. Exponential backoff for reconnection (1s, 2s, 4s, ... max 5min)
+4. On reconnect: sync queued data, refresh inventory
+
+### Database Schema (PostgreSQL)
+
+```sql
+-- Sites table
+CREATE TABLE sites (
+    id VARCHAR(64) PRIMARY KEY,
+    label VARCHAR(255) NOT NULL,
+    config JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Instances table
+CREATE TABLE instances (
+    id VARCHAR(64) PRIMARY KEY,
+    site_id VARCHAR(64) REFERENCES sites(id),
+    hostname VARCHAR(255) NOT NULL,
+    version VARCHAR(32),
+    is_leader BOOLEAN DEFAULT FALSE,
+    status VARCHAR(32) DEFAULT 'unknown',
+    last_heartbeat TIMESTAMPTZ,
+    registered_at TIMESTAMPTZ DEFAULT NOW(),
+    config JSONB DEFAULT '{}'
+);
+
+-- Devices table
+CREATE TABLE devices (
+    id VARCHAR(64) PRIMARY KEY,
+    site_id VARCHAR(64) REFERENCES sites(id),
+    sys_name VARCHAR(255),
+    sys_descr TEXT,
+    sys_contact VARCHAR(255),
+    sys_location VARCHAR(255),
+    discovered_at TIMESTAMPTZ,
+    last_seen TIMESTAMPTZ,
+    discovered_by VARCHAR(64) REFERENCES instances(id),
+    metadata JSONB DEFAULT '{}'
+);
+
+-- Agents table
+CREATE TABLE agents (
+    id VARCHAR(64) PRIMARY KEY,
+    device_id VARCHAR(64) REFERENCES devices(id) ON DELETE CASCADE,
+    address INET NOT NULL,
+    port INTEGER DEFAULT 161,
+    version INTEGER NOT NULL,  -- 1, 2, 3
+    config JSONB NOT NULL,     -- Community or USM credentials (encrypted)
+    is_primary BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Discovery seeds table
+CREATE TABLE discovery_seeds (
+    id VARCHAR(64) PRIMARY KEY,
+    site_id VARCHAR(64) REFERENCES sites(id),
+    targets TEXT[] NOT NULL,
+    snmp_config JSONB NOT NULL,  -- Encrypted credentials
+    schedule VARCHAR(64),
+    enabled BOOLEAN DEFAULT TRUE,
+    last_run TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Inventory versions (for optimistic concurrency)
+CREATE TABLE inventory_versions (
+    site_id VARCHAR(64) PRIMARY KEY REFERENCES sites(id),
+    version INTEGER DEFAULT 1,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Audit log
+CREATE TABLE audit_log (
+    id BIGSERIAL PRIMARY KEY,
+    site_id VARCHAR(64),
+    instance_id VARCHAR(64),
+    action VARCHAR(64) NOT NULL,
+    entity_type VARCHAR(64),
+    entity_id VARCHAR(64),
+    details JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_instances_site ON instances(site_id);
+CREATE INDEX idx_instances_heartbeat ON instances(last_heartbeat);
+CREATE INDEX idx_devices_site ON devices(site_id);
+CREATE INDEX idx_agents_device ON agents(device_id);
+CREATE INDEX idx_audit_site_time ON audit_log(site_id, created_at DESC);
+```
+
+### Deployment Architecture
+
+```mermaid
+flowchart TB
+    subgraph CloudProvider["Cloud Provider (AWS/GCP/Azure)"]
+        subgraph K8sManager["Kubernetes - Manager Cluster"]
+            direction TB
+            LB["Load Balancer<br/>(ALB/NLB)"]
+
+            subgraph ManagerPods["Manager Pods (3 replicas)"]
+                M1["Manager API"]
+                M2["Manager API"]
+                M3["Manager API"]
+            end
+
+            REDIS[("Redis Cluster<br/>WebSocket state")]
+            PG[("PostgreSQL<br/>RDS/Cloud SQL")]
+
+            LB --> M1
+            LB --> M2
+            LB --> M3
+            M1 <--> REDIS
+            M2 <--> REDIS
+            M3 <--> REDIS
+            M1 <--> PG
+            M2 <--> PG
+            M3 <--> PG
+        end
+    end
+
+    subgraph Site1["On-Premise Site A"]
+        PS1["PromSNMP x3"]
+        NET1[("Network<br/>Devices")]
+        PS1 --> NET1
+    end
+
+    subgraph Site2["On-Premise Site B"]
+        PS2["PromSNMP x2"]
+        NET2[("Network<br/>Devices")]
+        PS2 --> NET2
+    end
+
+    PS1 <-->|"HTTPS/WSS"| LB
+    PS2 <-->|"HTTPS/WSS"| LB
+
+    style CloudProvider fill:#e8f5e9,stroke:#2e7d32
+    style K8sManager fill:#e3f2fd,stroke:#1565c0
+```
+
+---
+
 ## Summary
 
 | Concern | Solution |
 |---------|----------|
 | **Fault Tolerance** | 3+ replicas with PodDisruptionBudget ensuring min 2 available |
-| **State Persistence** | Shared NFS/EFS volume for encrypted inventory file |
-| **Discovery Coordination** | Leader election (K8s native or Redis-based) |
+| **State Persistence** | Cloud Manager API (recommended) or shared NFS/EFS volume |
+| **Discovery Coordination** | Cloud Manager leader election or external service (Redis/etcd) |
 | **Load Balancing** | Kubernetes Service or HAProxy with health checks |
 | **Seamless Upgrades** | Rolling updates with maxUnavailable=1, or blue-green deployment |
 | **Monitoring** | Prometheus alerts for replica count, leader status, cache efficiency |
-| **Recovery** | Automatic pod restart, inventory reload from shared file |
+| **Recovery** | Automatic pod restart, inventory reload from manager or shared file |
+| **Multi-Site** | Cloud Manager provides centralized fleet management |
 
 This architecture provides:
 - **99.9%+ availability** with 3 replicas and proper health checks
 - **Zero-downtime upgrades** via rolling updates or blue-green deployment
-- **Data durability** through encrypted file persistence on shared storage
+- **Data durability** through Cloud Manager database or encrypted file persistence
 - **Coordinated discovery** preventing duplicate network scans
 - **Horizontal scalability** by adding more follower instances
+- **Fleet-wide visibility** through centralized Cloud Manager dashboard
