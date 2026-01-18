@@ -51,6 +51,11 @@ flowchart TB
 
 ### Docker Compose
 
+![Docker Compose Deployment](images/docker-deployment.jpg)
+
+<details>
+<summary>View Mermaid Diagram</summary>
+
 ```mermaid
 flowchart TB
     subgraph Host["Single Docker Host"]
@@ -69,6 +74,7 @@ flowchart TB
 
     style Host fill:#fff3e0,stroke:#ef6c00
 ```
+</details>
 
 **Characteristics:**
 - All containers on single host (or Swarm cluster)
@@ -82,6 +88,11 @@ flowchart TB
 ---
 
 ### Kubernetes
+
+![Kubernetes Deployment](images/kubernetes-deployment.jpg)
+
+<details>
+<summary>View Mermaid Diagram</summary>
 
 ```mermaid
 flowchart TB
@@ -108,6 +119,7 @@ flowchart TB
 
     style K8S fill:#e3f2fd,stroke:#1565c0
 ```
+</details>
 
 **Characteristics:**
 - Native K8s deployment with replicas
@@ -122,6 +134,11 @@ flowchart TB
 ---
 
 ### Cloud Manager
+
+![Cloud Manager Deployment](images/cloud-manager-deployment.jpg)
+
+<details>
+<summary>View Mermaid Diagram</summary>
 
 ```mermaid
 flowchart TB
@@ -151,6 +168,7 @@ flowchart TB
 
     style Cloud fill:#c8e6c9,stroke:#2e7d32
 ```
+</details>
 
 **Characteristics:**
 - Centralized management across sites
